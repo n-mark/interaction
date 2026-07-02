@@ -1,0 +1,33 @@
+asyncapi: 3.0.0
+info:
+  title: Notification Service Async API
+  version: 1.0.0
+  description: Спецификация для сервиса нотификаций.
+
+channels:
+  orderUpdated:
+    address: order.updated
+    messages:
+      orderUpdatedMsg:
+        $ref: '#/components/messages/OrderUpdated'
+
+operations:
+  # Шаг 16-17 на схеме
+  consumeOrderUpdated:
+    action: receive
+    channel:
+      $ref: '#/channels/orderUpdated'
+    summary: Потребление событий для отправки пушей/email пользователям.
+
+components:
+  messages:
+    OrderUpdated:
+      payload:
+        type: object
+        properties:
+          eventid: { type: string, format: uuid }
+          userid: { type: string }
+          orderid: { type: string }
+          event_description: { type: string }
+          message: { type: string }
+          notification_type: { type: string }

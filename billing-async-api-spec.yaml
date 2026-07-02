@@ -1,0 +1,52 @@
+asyncapi: 3.0.0
+info:
+  title: Billing Service Async API
+  version: 1.0.0
+  description: Спецификация асинхронного взаимодействия для сервиса биллинга.
+
+channels:
+  orderCreated:
+    address: order.created
+    messages:
+      orderCreatedMsg:
+        $ref: '#/components/messages/OrderCreated'
+  billingProcessed:
+    address: billing.processed
+    messages:
+      billingProcessedMsg:
+        $ref: '#/components/messages/BillingProcessed'
+
+operations:
+  # Шаг 9-10 на схеме
+  consumeOrderCreated:
+    action: receive
+    channel:
+      $ref: '#/channels/orderCreated'
+    summary: Подписка на новые заказы для списания средств.
+
+  # Шаг 11 на схеме
+  produceBillingProcessed:
+    action: send
+    channel:
+      $ref: '#/channels/billingProcessed'
+    summary: Публикация результата транзакции (успешно или нехватка средств).
+
+components:
+  messages:
+    OrderCreated:
+      payload:
+        type: object
+        properties:
+          eventid: { type: string, format: uuid }
+          userid: { type: string }
+          orderid: { type: string }
+          total: { type: number }
+
+    BillingProcessed:
+      payload:
+        type: object
+        properties:
+          eventid: { type: string, format: uuid }
+          userid: { type: string }
+          orderid: { type: string }
+          result: { type: string, enum: [SUCCESS, INSUFFICENT_FUNDS] }

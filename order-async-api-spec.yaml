@@ -1,0 +1,85 @@
+asyncapi: 3.0.0
+info:
+  title: Order Service Async API
+  version: 1.0.0
+  description: Спецификация асинхронного взаимодействия для сервиса заказов.
+
+channels:
+  orderCreated:
+    address: order.created
+    summary: Канал для оповещения о создании нового заказа.
+    messages:
+      orderCreatedMsg:
+        $ref: '#/components/messages/OrderCreated'
+        
+  billingProcessed:
+    address: billing.processed
+    summary: Канал результатов обработки оплаты.
+    messages:
+      billingProcessedMsg:
+        $ref: '#/components/messages/BillingProcessed'
+
+  orderUpdated:
+    address: order.updated
+    summary: Канал изменения статусов заказов для отправки уведомлений.
+    messages:
+      orderUpdatedMsg:
+        $ref: '#/components/messages/OrderUpdated'
+
+operations:
+  # Шаг 8 на схеме
+  produceOrderCreated:
+    action: send
+    channel:
+      $ref: '#/channels/orderCreated'
+    summary: Публикация события о том, что заказ создан и ожидает оплаты.
+
+  # Шаг 12-13 на схеме
+  consumeBillingProcessed:
+    action: receive
+    channel:
+      $ref: '#/channels/billingProcessed'
+    summary: Слушатель ответов от биллинга для обновления статуса заказа.
+
+  # Шаг 15 на схеме
+  produceOrderUpdated:
+    action: send
+    channel:
+      $ref: '#/channels/orderUpdated'
+    summary: Публикация события об обновлении статуса заказа (успех/ошибка).
+
+components:
+  messages:
+    OrderCreated:
+      payload:
+        type: object
+        required: [eventid, userid, orderid, total]
+        properties:
+          eventid: { type: string, format: uuid }
+          userid: { type: string }
+          orderid: { type: string }
+          total: { type: number, minimum: 0 }
+
+    BillingProcessed:
+      payload:
+        type: object
+        required: [eventid, userid, orderid, result]
+        properties:
+          eventid: { type: string, format: uuid }
+          userid: { type: string }
+          orderid: { type: string }
+          result: 
+            type: string
+            enum: [SUCCESS, INSUFFICENT_FUNDS]
+
+    OrderUpdated:
+      payload:
+        type: object
+        required: [eventid, userid, orderid, event_description, message, notification_type]
+        properties:
+          eventid: { type: string, format: uuid }
+          userid: { type: string }
+          orderid: { type: string }
+          event_description: { type: string }
+          message: { type: string }
+          notification_type: { type: string }
