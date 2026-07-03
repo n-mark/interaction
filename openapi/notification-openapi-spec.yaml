@@ -1,0 +1,68 @@
+openapi: 3.0.3
+info:
+  title: Notification Service API
+  version: 1.0.0
+  description: |
+    HTTP API сервиса нотификаций.
+servers:
+  - url: http://notification-service
+
+paths:
+  /notify:
+    post:
+      summary: Отправить уведомление пользователю
+      parameters:
+        - $ref: '#/components/parameters/XUserId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotifyRequest'
+      responses:
+        '202':
+          description: Уведомление принято к отправке
+        '400':
+          description: Некорректный запрос
+
+  /notifications:
+    get:
+      summary: Получить историю уведомлений пользователя
+      parameters:
+        - $ref: '#/components/parameters/XUserId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Notification' }
+
+components:
+  parameters:
+    XUserId:
+      name: X-User-Id
+      in: header
+      required: true
+      schema: { type: string }
+
+  schemas:
+    NotifyRequest:
+      type: object
+      required: [type, message]
+      properties:
+        type:
+          type: string
+          enum: [ORDER_PAID, ORDER_PAYMENT_FAILED, INFO]
+        message: { type: string }
+        order_id: { type: string }
+
+    Notification:
+      type: object
+      required: [id, type, message, created_at]
+      properties:
+        id:         { type: string }
+        type:       { type: string }
+        message:    { type: string }
+        created_at: { type: string, format: date-time }

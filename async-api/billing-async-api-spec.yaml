@@ -1,0 +1,100 @@
+asyncapi: 3.0.0
+info:
+  title: Billing Service Async API
+  version: 1.0.0
+  description: Спецификация асинхронного взаимодействия для сервиса биллинга.
+
+channels:
+  orderCreated:
+    address: order.created
+    summary: Входящий канал с новыми заказами (сценарий оплаты).
+    messages:
+      orderCreatedMsg:
+        $ref: '#/components/messages/OrderCreated'
+
+  billingProcessed:
+    address: billing.processed
+    summary: Исходящий канал с результатом транзакции.
+    messages:
+      billingProcessedMsg:
+        $ref: '#/components/messages/BillingProcessed'
+
+  profileCreated:
+    address: profile.created
+    summary: Входящий канал с событиями создания профиля (для заведения счёта).
+    messages:
+      profileCreatedMsg:
+        $ref: '#/components/messages/ProfileCreated'
+
+  billingAccountCreated:
+    address: billing.account_created
+    summary: Исходящий канал с событием о создании счёта пользователя.
+    messages:
+      billingAccountCreatedMsg:
+        $ref: '#/components/messages/BillingAccountCreated'
+
+operations:
+  # Шаг 9-10 на схеме
+  consumeOrderCreated:
+    action: receive
+    channel:
+      $ref: '#/channels/orderCreated'
+    summary: Подписка на новые заказы для списания средств.
+
+    # Шаг 11 на схеме
+  produceBillingProcessed:
+    action: send
+    channel:
+      $ref: '#/channels/billingProcessed'
+    summary: Публикация результата транзакции (успешно или нехватка средств).
+
+  # Сценарий создания профиля (вариант 3)
+  consumeProfileCreated:
+    action: receive
+    channel:
+      $ref: '#/channels/profileCreated'
+    summary: Подписка на создание профилей для заведения счёта.
+
+  produceBillingAccountCreated:
+    action: send
+    channel:
+      $ref: '#/channels/billingAccountCreated'
+    summary: Публикация события о создании счёта пользователя.
+
+components:
+  messages:
+    OrderCreated:
+      payload:
+        type: object
+        properties:
+          eventid: { type: string, format: uuid }
+          userid: { type: string }
+          orderid: { type: string }
+          total: { type: number }
+
+    BillingProcessed:
+      payload:
+        type: object
+        properties:
+          eventid: { type: string, format: uuid }
+          userid: { type: string }
+          orderid: { type: string }
+          result: { type: string, enum: [SUCCESS, INSUFFICENT_FUNDS] }
+
+    ProfileCreated:
+      payload:
+        type: object
+        required: [eventid, user_id, event_type]
+        properties:
+          eventid:    { type: string, format: uuid }
+          user_id:    { type: string }
+          event_type: { type: string, enum: [profile.created] }
+
+    BillingAccountCreated:
+      payload:
+        type: object
+        required: [eventid, user_id, event_type]
+        properties:
+          eventid:    { type: string, format: uuid }
+          user_id:    { type: string }
+          event_type: { type: string, enum: [billing.account_created] }

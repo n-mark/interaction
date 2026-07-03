@@ -1,0 +1,87 @@
+openapi: 3.0.3
+info:
+  title: Profile Service API
+  version: 1.0.0
+  description: |
+    HTTP API сервиса профилей.
+servers:
+  - url: http://profile-service
+
+paths:
+  /profile:
+    put:
+      summary: Создать или обновить профиль пользователя
+      parameters:
+        - $ref: '#/components/parameters/XUserId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProfileRequest'
+            examples:
+              alice:
+                value:
+                  name: "Alice"
+                  surname: "Doe"
+                  city: "Berlin"
+                  bio: "hi"
+      responses:
+        '201':
+          description: Профиль создан
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Profile' }
+        '200':
+          description: Профиль обновлён
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Profile' }
+
+    get:
+      summary: Получить текущий профиль
+      parameters:
+        - $ref: '#/components/parameters/XUserId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Profile' }
+        '404':
+          description: Не найдено
+
+components:
+  parameters:
+    XUserId:
+      name: X-User-Id
+      in: header
+      required: true
+      schema: { type: string }
+
+  schemas:
+    ProfileRequest:
+      type: object
+      required: [name, surname]
+      properties:
+        name:    { type: string }
+        surname: { type: string }
+        city:    { type: string }
+        bio:     { type: string }
+
+    ProfileStatus:
+      type: string
+      enum:
+        - CREATED
+        - BILLING_ACCOUNT_CREATE_PENDING
+
+    Profile:
+      type: object
+      required: [user_id, name, surname, status]
+      properties:
+        user_id: { type: string }
+        name:    { type: string }
+        surname: { type: string }
+        city:    { type: string }
+        bio:     { type: string }
+        status:  { $ref: '#/components/schemas/ProfileStatus' }

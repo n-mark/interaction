@@ -1,0 +1,56 @@
+asyncapi: 3.0.0
+info:
+  title: Profile Service Async API
+  version: 1.0.0
+  description: |
+    Асинхронное взаимодействие profile-service в варианте Event Collaboration.
+    profile-service публикует событие `profile.created` и слушает `billing.account_created`
+    чтобы завершить создание профиля (статус BILLING_ACCOUNT_CREATE_PENDING -> CREATED).
+
+channels:
+  profileCreated:
+    address: profile.created
+    summary: Событие о создании нового профиля.
+    messages:
+      profileCreatedMsg:
+        $ref: '#/components/messages/ProfileCreated'
+
+  billingAccountCreated:
+    address: billing.account_created
+    summary: Ответ биллинга о создании счёта.
+    messages:
+      billingAccountCreatedMsg:
+        $ref: '#/components/messages/BillingAccountCreated'
+
+operations:
+  produceProfileCreated:
+    action: send
+    channel:
+      $ref: '#/channels/profileCreated'
+    summary: Публикация события о создании профиля (шаг после 201 клиенту).
+
+  consumeBillingAccountCreated:
+    action: receive
+    channel:
+      $ref: '#/channels/billingAccountCreated'
+    summary: Слушатель ответа биллинга для перевода профиля в статус CREATED.
+
+components:
+  messages:
+    ProfileCreated:
+      payload:
+        type: object
+        required: [eventid, user_id, event_type]
+        properties:
+          eventid:    { type: string, format: uuid }
+          user_id:    { type: string }
+          event_type: { type: string, enum: [profile.created] }
+
+    BillingAccountCreated:
+      payload:
+        type: object
+        required: [eventid, user_id, event_type]
+        properties:
+          eventid:    { type: string, format: uuid }
+          user_id:    { type: string }
+          event_type: { type: string, enum: [billing.account_created] }

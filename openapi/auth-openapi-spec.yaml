@@ -1,0 +1,85 @@
+openapi: 3.0.3
+info:
+  title: Auth Service API
+  version: 1.0.0
+  description: |
+    HTTP API сервиса аутентификации. Вызывается api-gateway для валидации JWT.
+servers:
+  - url: http://auth-service
+
+paths:
+  /validate:
+    get:
+      summary: Проверить валидность JWT токена
+      description: |
+        api-gateway пробрасывает Authorization заголовок. При успехе сервис возвращает
+        200 и заголовок `X-User-Id`, который api-gateway подставляет в исходящий запрос
+        к целевому сервису.
+      parameters:
+        - name: Authorization
+          in: header
+          required: true
+          schema: { type: string }
+          example: "Bearer eyJhbGciOi..."
+      responses:
+        '200':
+          description: Токен валиден
+          headers:
+            X-User-Id:
+              description: Идентификатор пользователя, извлечённый из токена
+              schema: { type: string }
+        '401':
+          description: Токен невалиден или отсутствует
+
+  /login:
+    post:
+      summary: Получить JWT по логину/паролю
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [login, password]
+              properties:
+                login:    { type: string }
+                password: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [access_token]
+                properties:
+                  access_token: { type: string }
+                  token_type:   { type: string, example: "Bearer" }
+                  expires_in:   { type: integer, example: 3600 }
+        '401':
+          description: Неверный логин или пароль
+
+  /register:
+    post:
+      summary: Зарегистрировать нового пользователя
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [login, password]
+              properties:
+                login:    { type: string }
+                password: { type: string }
+      responses:
+        '201':
+          description: Пользователь создан
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user_id: { type: string }
+        '409':
+          description: Пользователь уже существует

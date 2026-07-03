@@ -1,0 +1,149 @@
+openapi: 3.0.3
+info:
+  title: Billing Service API
+  version: 1.0.0
+  description: |
+    HTTP API сервиса биллинга.
+servers:
+  - url: http://billing-service
+
+tags:
+  - name: accounts
+  - name: payments
+
+paths:
+  /account:
+    post:
+      tags: [accounts]
+      summary: Создать счёт пользователя
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAccountRequest'
+      responses:
+        '201':
+          description: Счёт создан
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Account' }
+        '409':
+          description: Счёт для пользователя уже существует
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+    get:
+      tags: [accounts]
+      summary: Получить состояние счёта текущего пользователя
+      parameters:
+        - $ref: '#/components/parameters/XUserId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Account' }
+        '404':
+          description: Счёт не найден
+
+  /deposit:
+    post:
+      tags: [payments]
+      summary: Положить деньги на счёт пользователя
+      parameters:
+        - $ref: '#/components/parameters/XUserId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AmountRequest'
+      responses:
+        '200':
+          description: Средства зачислены
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Account' }
+        '404':
+          description: Счёт не найден
+
+  /withdraw:
+    post:
+      tags: [payments]
+      summary: Снять деньги со счёта пользователя
+      parameters:
+        - $ref: '#/components/parameters/XUserId'
+        - name: Idempotency-Key
+          in: header
+          required: false
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WithdrawRequest'
+      responses:
+        '200':
+          description: Средства списаны
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WithdrawResponse' }
+        '402':
+          description: Payment Required - недостаточно средств
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+components:
+  parameters:
+    XUserId:
+      name: X-User-Id
+      in: header
+      required: true
+      schema: { type: string }
+
+  schemas:
+    CreateAccountRequest:
+      type: object
+      required: [user_id]
+      properties:
+        user_id: { type: string }
+
+    Account:
+      type: object
+      required: [user_id, balance]
+      properties:
+        user_id: { type: string }
+        balance: { type: number, minimum: 0 }
+
+    AmountRequest:
+      type: object
+      required: [amount]
+      properties:
+        amount: { type: number, minimum: 0 }
+
+    WithdrawRequest:
+      type: object
+      required: [amount]
+      properties:
+        amount:   { type: number, minimum: 0 }
+        order_id: { type: string, description: "Идентификатор заказа для трассировки/идемпотентности" }
+
+    WithdrawResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [SUCCESS, INSUFFICENT_FUNDS]
+        balance: { type: number }
+
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:    { type: string }
+        message: { type: string }
