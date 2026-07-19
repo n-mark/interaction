@@ -64,10 +64,10 @@ postgresProfile:
 
 # Shared RabbitMQ used by profile / billing / order / notification.
 rabbitmq:
-  image: rabbitmq:4.3.2-management
+  image: rabbitmq:3.13-management-alpine
   user: billing
   password: billing
-  storage: 1Gi
+  storage: 8Gi
   managementPort: 15672
   amqpPort: 5672
 
