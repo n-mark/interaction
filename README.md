@@ -236,6 +236,32 @@ sequenceDiagram
 - **Schema Registry / версионирование событий** — контракты `order.*`, `billing.*`, `profile.*` зафиксированы в AsyncAPI спецификациях выше.
 
 
+## Реализация
+
+### Сервис заказов
+
+- [`https://github.com/n-mark/order-svc`](https://github.com/n-mark/order-svc)
+- [`dockerhub: mblkuta/ordersvc:0.1.0`](https://hub.docker.com/repository/docker/mblkuta/ordersvc/tags/0.1.0/)
+
+
+### Сервис биллинга
+
+- [`https://github.com/n-mark/billing-svc`](https://github.com/n-mark/billing-svc)
+- [`dockerhub: mblkuta/billingsvc:0.1.2`](https://hub.docker.com/repository/docker/mblkuta/billingsvc/tags/0.1.2/)
+
+### Сервис нотификаций
+
+- [`https://github.com/n-mark/notificationsvc`](https://github.com/n-mark/notificationsvc)
+- [`dockerhub: mblkuta/notificationsvc:0.1.0`](https://hub.docker.com/repository/docker/mblkuta/notificationsvc/tags/0.1.0/)
+
+### Сервис профилей (новая версия, вынесен в отдельный репозиторий)
+
+- [`https://github.com/n-mark/profilesvc`](https://github.com/n-mark/profilesvc)
+- [`dockerhub: mblkuta/profile-service:0.2.0`](https://hub.docker.com/repository/docker/mblkuta/profile-service/tags/0.2.0/)
+
+В качестве брокера сообщений используется RabbitMQ. Однако за счет использования интерфейсов в сервисах в дальшнейшем возможно сделать реализации и для других брокеров сообщений
+
 ## Тесты 
 
-postman-скрипт доступен в директории ``
+postman-скрипт доступен в директории `tests/postman`
+Описание и инструкция по запуску находятся в [`tests/postman/README.md`](tests/postman/README.md)
