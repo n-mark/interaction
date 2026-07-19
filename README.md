@@ -263,13 +263,35 @@ sequenceDiagram
 
 ## Helm-чарт
 
-Для установки приложения в kubernetes кластер выполните команду (namespace: arch-hw)
+(namespace: arch-hw)
+<br>
+Для установки приложения в kubernetes кластер выполните из корневой директории проекта команду
 
 ```bash
-helm install arch-hw ./helm/arch-homework
+helm install arch-hw-interaction ./helm/arch-homework
 ```
 
 ## Тесты 
 
-postman-скрипт доступен в директории `tests/postman`
+После выполнения установки через helm необходимо дождаться готовности подов. Выполните команду `kubectl get po -n arch-hw`. Дождитесь запуска подов. (READY & RUNNING)
+
+```bash
+NAME                                    READY   STATUS    RESTARTS   AGE
+auth-service-9ddbd4df-k46h9             1/1     Running   0          54s
+billing-service-658c5d5975-rk9xf        1/1     Running   0          54s
+notification-service-7cb889bdfc-pwpjd   1/1     Running   0          54s
+order-service-7cb5879dcb-nxmsm          1/1     Running   0          54s
+postgres-0                              1/1     Running   0          54s
+postgres-billing-0                      1/1     Running   0          54s
+postgres-notification-0                 1/1     Running   0          54s
+postgres-order-0                        1/1     Running   0          54s
+postgres-profile-0                      1/1     Running   0          54s
+profile-service-6b4dfdffd8-5swsr        1/1     Running   0          54s
+rabbitmq-0                              1/1     Running   0          54s
+```
+
+Убедившись в готовности подов, можете переходить к тестированию.
+Postman-скрипт доступен в директории `tests/postman`
 Описание и инструкция по запуску находятся в [`tests/postman/README.md`](tests/postman/README.md)
+
+Удаление приложения после тестирования выполняется с помощью команды `helm uninstall arch-hw-interaction`
