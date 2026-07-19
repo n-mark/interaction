@@ -1,0 +1,77 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: auth-service-config
+  namespace: {{ include "arch.namespace" . }}
+data:
+  DB_HOST: "postgres.{{ include "arch.namespace" . }}.svc.cluster.local"
+  DB_PORT: "5432"
+  DB_NAME: {{ .Values.postgres.defaultDB | quote }}
+  DB_MAX_RETRIES: "30"
+  DB_RETRY_INTERVAL: "3"
+  APP_PORT: ":{{ .Values.auth.port }}"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: auth-service-secret
+  namespace: {{ include "arch.namespace" . }}
+type: Opaque
+stringData:
+  DB_USER: {{ .Values.postgres.user | quote }}
+  DB_PASSWORD: {{ .Values.postgres.password | quote }}
+  JWT_SECRET: {{ .Values.auth.jwtSecret | quote }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: auth-service
+  namespace: {{ include "arch.namespace" . }}
+  labels:
+    app: auth-service
+spec:
+  replicas: {{ .Values.auth.replicas }}
+  selector:
+    matchLabels:
+      app: auth-service
+  template:
+    metadata:
+      labels:
+        app: auth-service
+    spec:
+      containers:
+        - name: auth-service
+          image: "{{ .Values.image.auth.repository }}:{{ .Values.image.auth.tag }}"
+          imagePullPolicy: {{ .Values.image.auth.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.auth.port }}
+          envFrom:
+            - configMapRef:
+                name: auth-service-config
+            - secretRef:
+                name: auth-service-secret
+          readinessProbe:
+            httpGet: { path: /health, port: http }
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /health, port: http }
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          resources:
+{{ toYaml .Values.auth.resources | indent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: auth-service
+  namespace: {{ include "arch.namespace" . }}
+spec:
+  selector:
+    app: auth-service
+  ports:
+    - name: http
+      port: 80
+      targetPort: {{ .Values.auth.port }}
+      protocol: TCP

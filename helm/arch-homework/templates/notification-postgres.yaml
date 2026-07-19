@@ -1,0 +1,109 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-notification-init
+  namespace: {{ include "arch.namespace" . }}
+data:
+  001_init.sql: |
+    -- Notifications for users
+    CREATE TABLE IF NOT EXISTS notifications (
+      id           UUID PRIMARY KEY,
+      user_id      BIGINT         NOT NULL,
+      message       TEXT    NOT NULL,
+      type VARCHAR NOT NULL,
+      created_at   TIMESTAMPTZ    NOT NULL DEFAULT now(),
+      updated_at   TIMESTAMPTZ    NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
+    -- Outbox of processed events for idempotency
+    CREATE TABLE IF NOT EXISTS processed_events (
+      event_id     UUID PRIMARY KEY,
+      event_type   TEXT        NOT NULL,
+      processed_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres-notification-secret
+  namespace: {{ include "arch.namespace" . }}
+type: Opaque
+stringData:
+  POSTGRES_USER: {{ .Values.postgresNotification.user | quote }}
+  POSTGRES_PASSWORD: {{ .Values.postgresNotification.password | quote }}
+  POSTGRES_DB: {{ .Values.postgresNotification.database | quote }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-notification
+  namespace: {{ include "arch.namespace" . }}
+  labels:
+    app: postgres-notification
+spec:
+  clusterIP: None
+  selector:
+    app: postgres-notification
+  ports:
+    - name: pg
+      port: 5432
+      targetPort: 5432
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres-notification
+  namespace: {{ include "arch.namespace" . }}
+  labels:
+    app: postgres-notification
+spec:
+  serviceName: postgres-notification
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres-notification
+  template:
+    metadata:
+      labels:
+        app: postgres-notification
+    spec:
+      containers:
+        - name: postgres
+          image: {{ .Values.postgresNotification.image }}
+          ports:
+            - name: pg
+              containerPort: 5432
+          envFrom:
+            - secretRef:
+                name: postgres-notification-secret
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+              subPath: pgdata
+            - name: init
+              mountPath: /docker-entrypoint-initdb.d
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", {{ .Values.postgresNotification.user | quote }}]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", {{ .Values.postgresNotification.user | quote }}]
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          resources:
+            requests: { cpu: "100m", memory: "128Mi" }
+            limits:   { cpu: "500m", memory: "512Mi" }
+      volumes:
+        - name: init
+          configMap:
+            name: postgres-notification-init
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: {{ .Values.postgresNotification.storage }}

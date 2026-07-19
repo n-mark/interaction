@@ -1,0 +1,108 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-billing-init
+  namespace: {{ include "arch.namespace" . }}
+data:
+  001_init.sql: |
+    -- Billing accounts: one per user
+    CREATE TABLE IF NOT EXISTS billing_accounts (
+      id          UUID PRIMARY KEY,
+      user_id     BIGINT      NOT NULL UNIQUE,
+      balance     NUMERIC(18, 2) NOT NULL DEFAULT 0,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    -- Outbox of processed events for idempotency
+    CREATE TABLE IF NOT EXISTS processed_events (
+      event_id    UUID PRIMARY KEY,
+      event_type  TEXT        NOT NULL,
+      processed_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS idx_billing_accounts_user_id ON billing_accounts(user_id);
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres-billing-secret
+  namespace: {{ include "arch.namespace" . }}
+type: Opaque
+stringData:
+  POSTGRES_USER: {{ .Values.postgresBilling.user | quote }}
+  POSTGRES_PASSWORD: {{ .Values.postgresBilling.password | quote }}
+  POSTGRES_DB: {{ .Values.postgresBilling.database | quote }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-billing
+  namespace: {{ include "arch.namespace" . }}
+  labels:
+    app: postgres-billing
+spec:
+  clusterIP: None
+  selector:
+    app: postgres-billing
+  ports:
+    - name: pg
+      port: 5432
+      targetPort: 5432
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres-billing
+  namespace: {{ include "arch.namespace" . }}
+  labels:
+    app: postgres-billing
+spec:
+  serviceName: postgres-billing
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres-billing
+  template:
+    metadata:
+      labels:
+        app: postgres-billing
+    spec:
+      containers:
+        - name: postgres
+          image: {{ .Values.postgresBilling.image }}
+          ports:
+            - name: pg
+              containerPort: 5432
+          envFrom:
+            - secretRef:
+                name: postgres-billing-secret
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+              subPath: pgdata
+            - name: init
+              mountPath: /docker-entrypoint-initdb.d
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", {{ .Values.postgresBilling.user | quote }}]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", {{ .Values.postgresBilling.user | quote }}]
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          resources:
+            requests: { cpu: "100m", memory: "128Mi" }
+            limits:   { cpu: "500m", memory: "512Mi" }
+      volumes:
+        - name: init
+          configMap:
+            name: postgres-billing-init
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: {{ .Values.postgresBilling.storage }}

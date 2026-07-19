@@ -1,0 +1,111 @@
+global:
+  namespace: arch-hw
+  host: arch.homework
+
+image:
+  auth:
+    repository: mblkuta/auth-service
+    tag: latest
+    pullPolicy: Always
+  profile:
+    repository: mblkuta/profile-service
+    tag: 0.2.0
+    pullPolicy: Always
+  billing:
+    repository: mblkuta/billingsvc
+    tag: 0.1.2
+    pullPolicy: Always
+  order:
+    repository: mblkuta/ordersvc
+    tag: 0.1.0
+    pullPolicy: Always
+  notification:
+    repository: mblkuta/notificationsvc
+    tag: 0.1.0
+    pullPolicy: Always
+
+# Existing shared Postgres (used by auth-service and the legacy profiledb).
+postgres:
+  image: postgres:16-alpine
+  user: postgres
+  password: password
+  defaultDB: usersdb
+  profileDB: profiledb
+  storage: 1Gi
+
+# New per-service Postgres instances.
+postgresBilling:
+  image: postgres:16-alpine
+  user: billing
+  password: billing
+  database: billing
+  storage: 1Gi
+
+postgresOrder:
+  image: postgres:16-alpine
+  user: order
+  password: order
+  database: order
+  storage: 1Gi
+
+postgresNotification:
+  image: postgres:16-alpine
+  user: notification
+  password: notification
+  database: notification
+  storage: 1Gi
+
+postgresProfile:
+  image: postgres:16-alpine
+  user: social_user
+  password: social_pass
+  database: social
+  storage: 1Gi
+
+# Shared RabbitMQ used by profile / billing / order / notification.
+rabbitmq:
+  image: rabbitmq:4.3.2-management
+  user: billing
+  password: billing
+  storage: 1Gi
+  managementPort: 15672
+  amqpPort: 5672
+
+auth:
+  replicas: 1
+  port: 8000
+  jwtSecret: "changeme_super_secret_jwt_key_please_rotate"
+  resources:
+    requests: { cpu: "50m", memory: "64Mi" }
+    limits:   { cpu: "200m", memory: "128Mi" }
+
+profile:
+  replicas: 1
+  port: 8080
+  resources:
+    requests: { cpu: "50m", memory: "64Mi" }
+    limits:   { cpu: "200m", memory: "128Mi" }
+
+billing:
+  replicas: 1
+  port: 8080
+  resources:
+    requests: { cpu: "50m", memory: "64Mi" }
+    limits:   { cpu: "200m", memory: "128Mi" }
+
+order:
+  replicas: 1
+  port: 8080
+  resources:
+    requests: { cpu: "50m", memory: "64Mi" }
+    limits:   { cpu: "200m", memory: "128Mi" }
+
+notification:
+  replicas: 1
+  port: 8080
+  resources:
+    requests: { cpu: "50m", memory: "64Mi" }
+    limits:   { cpu: "200m", memory: "128Mi" }
+
+traefik:
+  entryPoint: web

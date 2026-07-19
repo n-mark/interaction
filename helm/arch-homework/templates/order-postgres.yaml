@@ -1,0 +1,110 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-order-init
+  namespace: {{ include "arch.namespace" . }}
+data:
+  001_init.sql: |
+    -- Orders: created by users, processed asynchronously via billing-svc
+    CREATE TABLE IF NOT EXISTS orders (
+      id           UUID PRIMARY KEY,
+      user_id      BIGINT         NOT NULL,
+      price        NUMERIC(18, 2) NOT NULL,
+      status       VARCHAR(32)    NOT NULL DEFAULT 'pending',
+      created_at   TIMESTAMPTZ    NOT NULL DEFAULT now(),
+      updated_at   TIMESTAMPTZ    NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);
+    CREATE INDEX IF NOT EXISTS idx_orders_status  ON orders(status);
+    -- Outbox of processed events for idempotency
+    CREATE TABLE IF NOT EXISTS processed_events (
+      event_id     UUID PRIMARY KEY,
+      event_type   TEXT        NOT NULL,
+      processed_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres-order-secret
+  namespace: {{ include "arch.namespace" . }}
+type: Opaque
+stringData:
+  POSTGRES_USER: {{ .Values.postgresOrder.user | quote }}
+  POSTGRES_PASSWORD: {{ .Values.postgresOrder.password | quote }}
+  POSTGRES_DB: {{ .Values.postgresOrder.database | quote }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-order
+  namespace: {{ include "arch.namespace" . }}
+  labels:
+    app: postgres-order
+spec:
+  clusterIP: None
+  selector:
+    app: postgres-order
+  ports:
+    - name: pg
+      port: 5432
+      targetPort: 5432
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres-order
+  namespace: {{ include "arch.namespace" . }}
+  labels:
+    app: postgres-order
+spec:
+  serviceName: postgres-order
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres-order
+  template:
+    metadata:
+      labels:
+        app: postgres-order
+    spec:
+      containers:
+        - name: postgres
+          image: {{ .Values.postgresOrder.image }}
+          ports:
+            - name: pg
+              containerPort: 5432
+          envFrom:
+            - secretRef:
+                name: postgres-order-secret
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+              subPath: pgdata
+            - name: init
+              mountPath: /docker-entrypoint-initdb.d
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", {{ .Values.postgresOrder.user | quote }}]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", {{ .Values.postgresOrder.user | quote }}]
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          resources:
+            requests: { cpu: "100m", memory: "128Mi" }
+            limits:   { cpu: "500m", memory: "512Mi" }
+      volumes:
+        - name: init
+          configMap:
+            name: postgres-order-init
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: {{ .Values.postgresOrder.storage }}

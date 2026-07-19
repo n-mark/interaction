@@ -1,0 +1,60 @@
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: forward-auth
+  namespace: {{ include "arch.namespace" . }}
+spec:
+  forwardAuth:
+    address: http://auth-service.{{ include "arch.namespace" . }}.svc.cluster.local/validate
+    trustForwardHeader: true
+    authResponseHeaders:
+      - X-User-Id
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: arch-homework
+  namespace: {{ include "arch.namespace" . }}
+spec:
+  entryPoints:
+    - {{ .Values.traefik.entryPoint }}
+  routes:
+    # Public auth endpoints (no forward-auth middleware)
+    - match: Host(`{{ include "arch.host" . }}`) && (PathPrefix(`/register`) || PathPrefix(`/login`) || PathPrefix(`/auth`))
+      kind: Rule
+      services:
+        - name: auth-service
+          port: 80
+    # Authenticated application services
+    - match: Host(`{{ include "arch.host" . }}`) && PathPrefix(`/profile`)
+      kind: Rule
+      services:
+        - name: profile-service
+          port: 80
+      middlewares:
+        - name: forward-auth
+          namespace: {{ include "arch.namespace" . }}
+    - match: Host(`{{ include "arch.host" . }}`) && PathPrefix(`/api/v1/billing`)
+      kind: Rule
+      services:
+        - name: billing-service
+          port: 80
+      middlewares:
+        - name: forward-auth
+          namespace: {{ include "arch.namespace" . }}
+    - match: Host(`{{ include "arch.host" . }}`) && PathPrefix(`/api/v1/order`)
+      kind: Rule
+      services:
+        - name: order-service
+          port: 80
+      middlewares:
+        - name: forward-auth
+          namespace: {{ include "arch.namespace" . }}
+    - match: Host(`{{ include "arch.host" . }}`) && PathPrefix(`/api/v1/notifications`)
+      kind: Rule
+      services:
+        - name: notification-service
+          port: 80
+      middlewares:
+        - name: forward-auth
+          namespace: {{ include "arch.namespace" . }}
