@@ -201,7 +201,11 @@
             "script": {
               "type": "text/javascript",
               "exec": [
-                "pm.test('order success: status is 2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });"
+                "pm.test('order success: status is 2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+      "var orderJson = pm.response.json();",
+      "pm.test('order success: response has id (UUID)', function () { pm.expect(orderJson.id).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i); });",
+      "pm.collectionVariables.set('orderIdSuccess', orderJson.id);",
+      "console.log('[order] success id=' + orderJson.id);"
               ]
             }
           }]
@@ -241,9 +245,12 @@
                 "var json = pm.response.json();",
                 "pm.test('notifications: status is 2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
                 "pm.test('notifications: is a non-empty array', function () { pm.expect(json).to.be.an('array').and.have.lengthOf.at.least(1); });",
-                "pm.test('notifications: at least one success message about order', function () {",
-                "  var has = json.some(function (n) { return typeof n.message === 'string' && n.message.indexOf('успешно оформлен') !== -1; });",
-                "  pm.expect(has, 'expected a success-order notification').to.be.true;",
+                "pm.test('notifications: contains success message for orderIdSuccess', function () {",
+                "  var oid = pm.collectionVariables.get('orderIdSuccess');",
+                "  pm.expect(oid, 'orderIdSuccess must be set by POST /order').to.match(/^[0-9a-f-]{36}$/i);",
+                "  var hit = json.find(function (n) { return typeof n.message === 'string' && n.message.indexOf(oid) !== -1; });",
+                "  pm.expect(hit, 'no notification referencing orderIdSuccess=' + oid).to.exist;",
+                "  pm.expect(hit.message, 'success phrase').to.include('успешно оформлен');",
                 "});"
               ]
             }
@@ -272,7 +279,11 @@
               "exec": [
                 "pm.test('order fail: server accepted (returns 4xx for business error)', function () {",
                 "  pm.expect(pm.response.code).to.be.within(200, 499);",
-                "});"
+                "});",
+                "var orderJson = pm.response.json();",
+                "pm.test('order fail: response has id (UUID)', function () { pm.expect(orderJson.id).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i); });",
+                "pm.collectionVariables.set('orderIdFail', orderJson.id);",
+                "console.log('[order] fail id=' + orderJson.id);"
               ]
             }
           }]
@@ -311,9 +322,13 @@
               "exec": [
                 "var json = pm.response.json();",
                 "pm.test('notifications: status is 2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
-                "pm.test('notifications: at least one insufficient-funds message', function () {",
-                "  var has = json.some(function (n) { return typeof n.message === 'string' && n.message.indexOf('недостаточно средств') !== -1; });",
-                "  pm.expect(has, 'expected an insufficient-funds notification').to.be.true;",
+                "pm.test('notifications: contains insufficient-funds message for orderIdFail', function () {",
+                "  var oid = pm.collectionVariables.get('orderIdFail');",
+                "  pm.expect(oid, 'orderIdFail must be set by POST /order').to.match(/^[0-9a-f-]{36}$/i);",
+                "  var hit = json.find(function (n) { return typeof n.message === 'string' && n.message.indexOf(oid) !== -1; });",
+                "  pm.expect(hit, 'no notification referencing orderIdFail=' + oid).to.exist;",
+                "  pm.expect(hit.message, 'fail phrase').to.include('Не удалось оформить заказ');",
+                "  pm.expect(hit.message, 'insufficient funds phrase').to.include('недостаточно средств');",
                 "});"
               ]
             }
