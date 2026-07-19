@@ -1,7 +1,5 @@
 # arch-homework e2e (Postman / newman)
 
-End-to-end smoke-сценарий для helm-чарта `arch-homework`.
-
 ## Сценарий
 
 1. **Auth**
@@ -29,15 +27,9 @@ End-to-end smoke-сценарий для helm-чарта `arch-homework`.
 - `run.sh` — обёртка для запуска через `newman` (CLI + JUnit отчёты).
 - `newman/report.json`, `newman/report.xml` — артефакты последнего прогона.
 
-## Установка
+## Установка newman
 
-```bash
-# локально в репозитории (рядом с helm-чартом):
-cd tests
-npm install
-```
-
-Глобально:
+Установите Node.js и npm, если они еще не установлены, скачав их с официального сайта Node.js. Затем выполните комаду
 
 ```bash
 npm install -g newman
@@ -52,6 +44,14 @@ npm install -g newman
 # или на другой URL (например, через port-forward):
 BASE_URL=http://localhost:8080 ./tests/postman/run.sh
 ```
+
+либо выплоните из корневой директории проекта команду
+
+```bash
+newman run tests/postman/arch-homework.postman_collection.json \
+  --env-var "baseUrl=http://arch.homework"
+```
+
 
 В консоль будут выведены: имя запроса, HTTP-метод, URL, request headers/body, response headers/body и результаты ассертов. После прогона лежат:
 
@@ -75,30 +75,3 @@ pm.collectionVariables.set('token', json.token);
 ```
 
 Все защищённые эндпоинты (`/profile`, `/billing`, `/order`, `/notifications`) автоматически подставляют `Authorization: Bearer {{token}}` в заголовке.
-
-## Ожидаемые коды ответов
-
-| Шаг | URL | Метод | Ожидаемый код |
-|---|---|---|---|
-| Register | `/register` | POST | 200-299 |
-| Login | `/login` | POST | 200-299 |
-| Create profile | `/profile` | POST | 200-299 |
-| Get billing | `/billing` | GET | 200-299 |
-| Top up | `/billing` | PUT | 200-299 |
-| Order (ok) | `/order` | POST | 200-299 |
-| Order (fail) | `/order` | POST | 200-499 (бизнес-ошибка, не 5xx) |
-
-## CI-пример (GitHub Actions)
-
-```yaml
-- name: e2e
-  run: |
-    cd tests
-    npm ci
-    ./postman/run.sh
-- name: publish junit
-  if: always()
-  uses: mikepenz/action-junit-report@v4
-  with:
-    report_paths: tests/postman/newman/report.xml
-```
