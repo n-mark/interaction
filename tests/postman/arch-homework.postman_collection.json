@@ -1,0 +1,325 @@
+{
+  "info": {
+    "name": "arch-homework e2e",
+    "description": "End-to-end scenario: register -> login -> billing auto-created -> top-up -> successful order -> balance debited -> notification -> failed order -> balance unchanged -> notification. Runs against the helm chart deployed at {{baseUrl}}.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://arch.homework", "type": "string" },
+    { "key": "username", "value": "janechifa_postman", "type": "string" },
+    { "key": "password", "value": "Qwerty123!", "type": "string" },
+    { "key": "email", "value": "chifa-postman@chifa.ru", "type": "string" },
+    { "key": "phone", "value": "1234567", "type": "string" },
+    { "key": "token", "value": "", "type": "string" },
+    { "key": "userId", "value": "", "type": "string" },
+    { "key": "balanceBefore", "value": "", "type": "string" },
+    { "key": "balanceAfterSuccess", "value": "", "type": "string" },
+    { "key": "balanceAfterFail", "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "1. Auth",
+      "item": [
+        {
+          "name": "Register user",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Генерируем уникальные username/email/phone перед каждым запуском,",
+                  "// чтобы коллекцию можно было прогонять многократно без 409 Conflict.",
+                  "var ts = Date.now();",
+                  "var rnd = Math.floor(Math.random() * 100000);",
+                  "var username = 'janechifa_' + ts + '_' + rnd;",
+                  "var email = 'chifa_' + ts + '_' + rnd + '@chifa.ru';",
+                  "var phone = String(1000000 + Math.floor(Math.random() * 8999999));",
+                  "pm.collectionVariables.set('username', username);",
+                  "pm.collectionVariables.set('email', email);",
+                  "pm.collectionVariables.set('phone', phone);",
+                  "console.log('[setup] username=' + username + ' email=' + email);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('register: status is 2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+                  "pm.test('register: username saved', function () { pm.expect(pm.collectionVariables.get('username')).to.match(/^janechifa_\\d+_\\d+$/); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/register", "host": ["{{baseUrl}}"], "path": ["register"] },
+            "body": { "mode": "raw", "raw": "{\"username\":\"{{username}}\",\"password\":\"{{password}}\",\"email\":\"{{email}}\",\"phone\":\"{{phone}}\"}" }
+          }
+        },
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/login", "host": ["{{baseUrl}}"], "path": ["login"] },
+            "body": { "mode": "raw", "raw": "{\"username\":\"{{username}}\",\"password\":\"{{password}}\"}" }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "var json = pm.response.json();",
+                "pm.test('login: status is 2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+                "pm.test('login: token is present', function () { pm.expect(json.token).to.be.a('string').and.not.empty; });",
+                "pm.collectionVariables.set('token', json.token);",
+                "// user_id is encoded in JWT payload (sub claim, base64url)",
+                "try {",
+                "  var parts = json.token.split('.');",
+                "  var payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf8'));",
+                "  if (payload.sub) pm.collectionVariables.set('userId', String(payload.sub));",
+                "} catch (e) {}"
+              ]
+            }
+          }]
+        },
+        {
+          "name": "Create profile",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/profile", "host": ["{{baseUrl}}"], "path": ["profile"] },
+            "body": { "mode": "raw", "raw": "{\"name\":\"jane\",\"surname\":\"chifa\",\"gender\":\"FEMALE\",\"interests\":\"5\",\"city\":\"6\",\"bio\":\"7\"}" }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('create profile: status is 2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });"
+              ]
+            }
+          }]
+        }
+      ]
+    },
+    {
+      "name": "2. Billing account is auto-created",
+      "item": [
+        {
+          "name": "Get billing account",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/billing", "host": ["{{baseUrl}}"], "path": ["billing"] }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "var json = pm.response.json();",
+                "pm.test('billing: status is 2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+                "pm.test('billing: account exists for user', function () { pm.expect(json.user_id).to.exist; pm.expect(String(json.user_id)).to.not.be.empty; });",
+                "pm.test('billing: initial balance is 0', function () { pm.expect(Number(json.balance)).to.eql(0); });",
+                "pm.collectionVariables.set('balanceBefore', String(json.balance));",
+                "if (json.user_id) pm.collectionVariables.set('userId', String(json.user_id));"
+              ]
+            }
+          }]
+        }
+      ]
+    },
+    {
+      "name": "3. Top up balance",
+      "item": [
+        {
+          "name": "Top up (PUT /billing)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/billing", "host": ["{{baseUrl}}"], "path": ["billing"] },
+            "body": { "mode": "raw", "raw": "{\"amount\":16.90}" }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('top-up: status is 2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });"
+              ]
+            }
+          }]
+        },
+        {
+          "name": "Verify balance after top-up",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/billing", "host": ["{{baseUrl}}"], "path": ["billing"] }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "var json = pm.response.json();",
+                "pm.test('balance after top-up: status is 2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+                "pm.test('balance after top-up: equals 16.9', function () { pm.expect(Number(json.balance).toFixed(2)).to.eql('16.90'); });"
+              ]
+            }
+          }]
+        }
+      ]
+    },
+    {
+      "name": "4. Successful order (debited balance)",
+      "item": [
+        {
+          "name": "Create order (price=10)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/order", "host": ["{{baseUrl}}"], "path": ["order"] },
+            "body": { "mode": "raw", "raw": "{\"price\":10}" }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('order success: status is 2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });"
+              ]
+            }
+          }]
+        },
+        {
+          "name": "Verify balance after successful order",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/billing", "host": ["{{baseUrl}}"], "path": ["billing"] }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "var json = pm.response.json();",
+                "pm.test('balance after order: status is 2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+                "pm.test('balance after order: debited by 10 (16.9 -> 6.9)', function () { pm.expect(Number(json.balance).toFixed(2)).to.eql('6.90'); });",
+                "pm.collectionVariables.set('balanceAfterSuccess', String(json.balance));"
+              ]
+            }
+          }]
+        },
+        {
+          "name": "Verify notification for successful order",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/notifications", "host": ["{{baseUrl}}"], "path": ["notifications"] }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "var json = pm.response.json();",
+                "pm.test('notifications: status is 2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+                "pm.test('notifications: is a non-empty array', function () { pm.expect(json).to.be.an('array').and.have.lengthOf.at.least(1); });",
+                "pm.test('notifications: at least one success message about order', function () {",
+                "  var has = json.some(function (n) { return typeof n.message === 'string' && n.message.indexOf('успешно оформлен') !== -1; });",
+                "  pm.expect(has, 'expected a success-order notification').to.be.true;",
+                "});"
+              ]
+            }
+          }]
+        }
+      ]
+    },
+    {
+      "name": "5. Failed order (balance unchanged)",
+      "item": [
+        {
+          "name": "Create order (price=100, insufficient funds)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/order", "host": ["{{baseUrl}}"], "path": ["order"] },
+            "body": { "mode": "raw", "raw": "{\"price\":100}" }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('order fail: server accepted (returns 4xx for business error)', function () {",
+                "  pm.expect(pm.response.code).to.be.within(200, 499);",
+                "});"
+              ]
+            }
+          }]
+        },
+        {
+          "name": "Verify balance unchanged",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/billing", "host": ["{{baseUrl}}"], "path": ["billing"] }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "var json = pm.response.json();",
+                "pm.test('balance after fail: status is 2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+                "pm.test('balance after fail: still 6.9 (unchanged)', function () { pm.expect(Number(json.balance).toFixed(2)).to.eql('6.90'); });",
+                "pm.collectionVariables.set('balanceAfterFail', String(json.balance));"
+              ]
+            }
+          }]
+        },
+        {
+          "name": "Verify notification for failed order",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/notifications", "host": ["{{baseUrl}}"], "path": ["notifications"] }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "var json = pm.response.json();",
+                "pm.test('notifications: status is 2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+                "pm.test('notifications: at least one insufficient-funds message', function () {",
+                "  var has = json.some(function (n) { return typeof n.message === 'string' && n.message.indexOf('недостаточно средств') !== -1; });",
+                "  pm.expect(has, 'expected an insufficient-funds notification').to.be.true;",
+                "});"
+              ]
+            }
+          }]
+        }
+      ]
+    }
+  ]
+}
